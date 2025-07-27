@@ -8,6 +8,22 @@ import { pay } from 'ln-service'
 import { authenticatedLndGrpc } from 'lightning'
 import sgMail from '@sendgrid/mail'
 import twilio from 'twilio'
+// Cyphernode integration for BullPay Liquid functionality
+const CyphernodeBullPayClient = require('./cyphernode-client')
+
+// Cyphernode environment variables
+const cyphernodeBaseUrl = process.env.cyphernodeBaseUrl
+const cyphernodeApiId = process.env.cyphernodeApiId
+const cyphernodeApiKey = process.env.cyphernodeApiKey
+
+// Initialize Cyphernode client (only if all config is present)
+let cyphernodeClient = null
+if (cyphernodeBaseUrl && cyphernodeApiId && cyphernodeApiKey) {
+  cyphernodeClient = new CyphernodeBullPayClient(cyphernodeBaseUrl, cyphernodeApiId, cyphernodeApiKey)
+  console.log('Cyphernode client initialized')
+} else {
+  console.log('Cyphernode configuration incomplete - client not initialized')
+}
 // set all the env vars
 const port = process.env.port
 const webhookSecret = process.env.webhookSecret
@@ -2394,40 +2410,48 @@ const getBullPayOrderSummary = async (token, orderId) => {
     
     if (data.result) {
       return data.result;
+const validateLiquidDescriptor = async (liquidWalletDescriptor) => {
+  console.log("Validating liquid descriptor:", liquidWalletDescriptor)
+  
+  // Check if Cyphernode client is available
+  if (!cyphernodeClient) {
+    console.error("Cyphernode client not initialized - cannot validate descriptor")
+    return {
+      isValid: false,
+      error: "Cyphernode service not available"
     }
-
-    throw new Error('Order summary not found in response');
+  }
+  
+  try {
+    const result = await cyphernodeClient.validateLiquidDescriptor(liquidWalletDescriptor)
+    console.log("Cyphernode validation result:", result)
+    return result
   } catch (error) {
-    console.error('Error getting BullPay order summary:', error);
-    return null;
+    console.error("Error validating liquid descriptor:", error)
+    return {
+      isValid: false,
+      error: error.message
+    }
+const liquidPayment = async (btcAmount, liquidWalletDescriptor) => {
+  console.log("Sending Bitcoin to liquid descriptor:", btcAmount, liquidWalletDescriptor)
+  
+  // Check if Cyphernode client is available
+  if (!cyphernodeClient) {
+    console.error("Cyphernode client not initialized - cannot process payment")
+    return null
+  }
+  
+  try {
+    const result = await cyphernodeClient.liquidPayment(btcAmount, liquidWalletDescriptor)
+    console.log("Cyphernode payment result:", result)
+    return result
+  } catch (error) {
+    console.error("Error sending liquid payment:", error)
+    return null
   }
 }
-
-// TODO: Implement these functions for Liquid wallet integration:
-
-// validateLiquidDescriptor function should:
-// - Accept: liquidWalletDescriptor (string)
-// - Validate the descriptor format via Cyphernode API call
-// - Return: { isValid: boolean, error: string|null }
-// - API endpoint: POST to Cyphernode validateLiquidDescriptor
-// - Expected API response: { "valid": true } or { "valid": false, "error": "message" }
-const validateLiquidDescriptor = async (liquidWalletDescriptor) => {
-  // TODO: Implement Cyphernode API call to validate liquid descriptor
-  // This function should call the Cyphernode API to validate the descriptor format
-  // and return the validation result
-  throw new Error('validateLiquidDescriptor not yet implemented')
-}
-
-// liquidPayment function should:
-// - Accept: btcAmount (number), liquidWalletDescriptor (string)
-// - Send Bitcoin to the Liquid wallet descriptor via Cyphernode API call
-// - Return: result object with hash if successful, null if failed
-// - API endpoint: POST to Cyphernode spendToLiquidDescriptor  
-// - Expected API response: { "status": "accepted", "hash": "txid", "details": {...} }
-const liquidPayment = async (btcAmount, liquidWalletDescriptor) => {
   // TODO: Implement Cyphernode API call to send Bitcoin to liquid descriptor
   // This function should call the Cyphernode API to spend Bitcoin to the descriptor
   // and return the transaction result
   throw new Error('liquidPayment not yet implemented')
-}
 }
